@@ -1,0 +1,107 @@
+# Gitleaks Configuration for Markhor Farms
+# Detects secrets and sensitive information in git history
+# Run: gitleaks detect --config gitleaks-config.toml
+
+title = "Markhor Farms Secret Detection"
+description = "Gitleaks configuration to detect secrets in markhor-farms repository"
+version = 1.0
+
+[allowlist]
+  description = "Allowlisted patterns or files"
+  paths = [
+    "gitleaks-config.toml",
+    ".env.example",
+    "docker-compose.yml",
+    "Dockerfile*",
+  ]
+  commits = []
+  regexes = []
+
+[source]
+  # Scan git history
+  name = "git"
+  path = ""
+
+[report]
+  # Output format: json, csv, sarif
+  format = "json"
+  path = ""
+  verbose = false
+
+# Rules for detecting secrets
+
+[[rules]]
+  id = "markhor-env-password"
+  description = "Detect plaintext POSTGRES_PASSWORD in files"
+  regex = '''POSTGRES_PASSWORD\s*[=:]\s*["']?(?!changeme|example|test)[a-zA-Z0-9!@#$%^&*()_+=\-]{8,}["']?'''
+  file = "^(.env|docker-compose.*|.*\.yml)$"
+  severity = "HIGH"
+  entropy = 3.0
+
+[[rules]]
+  id = "markhor-drupal-secret"
+  description = "Detect Drupal hash_salt in settings.php"
+  regex = '''hash_salt.*[=:]\s*["']([a-zA-Z0-9]+)["']'''
+  file = "settings.php|settings.local.php"
+  severity = "MEDIUM"
+
+[[rules]]
+  id = "markhor-api-key"
+  description = "Detect API keys or tokens"
+  regex = '''(api[_-]?key|api[_-]?secret|access[_-]?token)\s*[=:]\s*["']?([a-zA-Z0-9\-_]{20,})["']?'''
+  severity = "HIGH"
+  entropy = 4.0
+
+[[rules]]
+  id = "markhor-db-password"
+  description = "Detect database passwords in connection strings"
+  regex = '''(postgresql|mysql|mariadb)[://]+[a-zA-Z0-9_]*:(?!changeme|example|test)([a-zA-Z0-9!@#$%^&*()_+=\-]{8,})@'''
+  severity = "CRITICAL"
+
+[[rules]]
+  id = "markhor-private-key"
+  description = "Detect private keys (RSA, EC, OpenSSH)"
+  regex = '''-----BEGIN (RSA|EC|OPENSSH) PRIVATE KEY-----'''
+  severity = "CRITICAL"
+
+[[rules]]
+  id = "markhor-aws-key"
+  description = "Detect AWS access keys"
+  regex = '''AKIA[0-9A-Z]{16}'''
+  severity = "CRITICAL"
+
+[[rules]]
+  id = "markhor-github-token"
+  description = "Detect GitHub personal access tokens"
+  regex = '''ghp_[a-zA-Z0-9_]{36,255}|github[_]?token\s*[=:]\s*["']?([a-zA-Z0-9_]{40,})["']?'''
+  severity = "CRITICAL"
+
+[[rules]]
+  id = "markhor-jwt-token"
+  description = "Detect JWT tokens"
+  regex = '''eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'''
+  severity = "HIGH"
+  entropy = 5.0
+
+[[rules]]
+  id = "markhor-docker-credentials"
+  description = "Detect Docker registry credentials"
+  regex = '''\"auth\"\s*:\s*\"[a-zA-Z0-9+/]{20,}={0,2}\"'''
+  severity = "CRITICAL"
+
+[[rules]]
+  id = "markhor-cipher-password"
+  description = "Detect encrypted passwords in configs"
+  regex = '''cipher[_]?password\s*[=:]\s*["']?(?!changeme|example|test)([a-zA-Z0-9!@#$%^&*()_+=\-]{16,})["']?'''
+  severity = "MEDIUM"
+
+# Exclude paths from scanning
+[allowlist]
+  paths = [
+    "gitleaks-config.toml$",
+    ".env.example$",
+    "docs/DEPLOYMENT_CHECKLIST.md$",
+    "tests/fixtures/.*",
+    "LEGAL.md$",
+    "README.md$",
+  ]

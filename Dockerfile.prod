@@ -1,0 +1,90 @@
+FROM php:8.2-fpm-alpine AS builder
+
+# Install system dependencies
+RUN apk add --no-cache \
+    postgresql-client \
+    postgresql-dev \
+    wget \
+    git \
+    curl \
+    zip \
+    unzip \
+    libpng-dev \
+    libjpeg-turbo-dev \
+    freetype-dev \
+    gmp-dev \
+    icu-dev \
+    zlib-dev \
+    libzip-dev \
+    imagemagick \
+    imagemagick-dev
+
+# Install PHP extensions
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) \
+    gd \
+    pdo_pgsql \
+    pgsql \
+    gmp \
+    intl \
+    zip \
+    opcache \
+    && pecl install imagick \
+    && docker-php-ext-enable imagick
+
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Set working directory
+WORKDIR /opt/drupal
+
+# Download and install Drupal with farmOS (no dev dependencies)
+RUN composer create-project farmos/farm /opt/drupal --prefer-dist --no-dev --no-scripts
+
+# Production runtime stage
+FROM php:8.2-fpm-alpine
+
+ARG OPTIMIZE=true
+
+# Install only required runtime dependencies
+RUN apk add --no-cache \
+    postgresql-client \
+    libpng \
+    libjpeg-turbo \
+    freetype \
+    gmp \
+    icu-libs \
+    libzip \
+    imagemagick
+
+# Install PHP extensions
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) \
+    gd \
+    pdo_pgsql \
+    pgsql \
+    gmp \
+    intl \
+    zip \
+    opcache \
+    && pecl install imagick \
+    && docker-php-ext-enable imagick
+
+# Copy from builder
+COPY --from=builder --chown=www-data:www-data /opt/drupal /opt/drupal
+
+# Set working directory
+WORKDIR /opt/drupal
+
+# Copy PHP production configuration
+COPY docker/php/php-prod.ini /usr/local/etc/php/php.ini
+COPY docker/php/php-fpm-prod.conf /usr/local/etc/php-fpm.d/www.conf
+
+# Set proper permissions
+RUN find /opt/drupal -type d -exec chmod 755 {} \; && \
+    find /opt/drupal -type f -exec chmod 644 {} \; && \
+    chown -R www-data:www-data /opt/drupal
+
+EXPOSE 9000
+
+CMD ["php-fpm"]

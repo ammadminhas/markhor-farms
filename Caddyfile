@@ -1,0 +1,101 @@
+# Markhor Farms - Caddy Configuration
+# Reverse proxy and SSL termination
+
+{
+    email admin@markhorconsultants.com
+    admin localhost:2019
+    auto_https on
+}
+
+(common) {
+    # Enable compression
+    encode gzip
+
+    # Security headers
+    header / X-Frame-Options "SAMEORIGIN"
+    header / X-XSS-Protection "1; mode=block"
+    header / X-Content-Type-Options "nosniff"
+    header / Referrer-Policy "no-referrer-when-downgrade"
+    header / Permissions-Policy "geolocation=(), microphone=(), camera=()"
+
+    # Log settings
+    log {
+        output stdout
+        format json
+    }
+}
+
+# HTTP redirect to HTTPS
+http://markhorconsultants.com {
+    redir https://markhorconsultants.com{uri} permanent
+}
+
+http://www.markhorconsultants.com {
+    redir https://markhorconsultants.com{uri} permanent
+}
+
+# HTTPS configuration
+markhorconsultants.com, www.markhorconsultants.com {
+    import common
+
+    # Upstream proxy to nginx
+    reverse_proxy nginx:80 {
+        # Preserve original headers
+        header_uri X-Forwarded-Proto https
+        header_uri X-Forwarded-Host {host}
+        header_uri X-Forwarded-For {remote}
+
+        # Timeouts
+        timeout 300s
+        policy random_choose
+
+        # Health check
+        health_uri /health
+        health_interval 30s
+        health_timeout 5s
+    }
+
+    # Static file caching
+    @static {
+        path_regexp ^/.*\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|pdf)$
+    }
+
+    header @static Cache-Control "public, max-age=2592000, immutable"
+
+    # Drupal-specific rules
+    @files path_regexp ^/sites/default/files/.*
+    handle @files {
+        header Cache-Control "public, max-age=31536000"
+        reverse_proxy nginx:80
+    }
+
+    @private path_regexp ^/(admin|user|system|install\.php|update\.php)
+    handle @private {
+        reverse_proxy nginx:80 {
+            header_uri X-Forwarded-Proto https
+            header_uri X-Forwarded-Host {host}
+            header_uri X-Forwarded-For {remote}
+        }
+    }
+
+    # Rate limiting for admin
+    @admin path_regexp ^/admin/
+    rate_limit @admin 10 {
+        window 1m
+        burst 5
+        key {remote_host}
+    }
+
+    # Default handler
+    reverse_proxy nginx:80 {
+        header_uri X-Forwarded-Proto https
+        header_uri X-Forwarded-Host {host}
+        header_uri X-Forwarded-For {remote}
+        timeout 300s
+    }
+}
+
+# Monitoring endpoint
+localhost:2019 {
+    respond /health "OK"
+}

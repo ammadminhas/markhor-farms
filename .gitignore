@@ -1,0 +1,72 @@
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+.env.prod
+
+# Data directories (user-generated)
+data/
+volumes/
+
+# Docker volumes and backups
+backups/
+postgres_data/
+php_vendor/
+php_cache/
+caddy_data/
+caddy_config/
+
+# Drupal files and cache
+web/
+vendor/
+!web/.gitkeep
+sites/default/files/
+sites/default/private/
+sites/*/settings.local.php
+
+# IDE & Editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+*.swp
+*.swo
+*~
+.project
+.buildpath
+.settings
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
+
+# Node modules
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build artifacts
+dist/
+build/
+*.tar.gz
+
+# Database dumps (except backups)
+*.sql
+!scripts/
+
+# Temporary files
+*.bak
+*.cache
+.tmp/
+
+# Docker build cache
+.docker/
+
+# IDE specific
+.claude/
+.devcontainer/
+.editorconfig.local

@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+  postgres:
+    restart: always
+    environment:
+      POSTGRES_INITDB_ARGS: "--locale=en_US.UTF-8 --encoding=UTF8"
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=1GB"
+      - "-c"
+      - "work_mem=4MB"
+      - "-c"
+      - "maintenance_work_mem=64MB"
+      - "-c"
+      - "log_statement=mod"
+      - "-c"
+      - "log_duration=off"
+      - "-c"
+      - "log_min_duration_statement=1000"
+    ports: []
+    networks:
+      - farmos_network
+
+  php:
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        - OPTIMIZE=true
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      DRUPAL_ENVIRONMENT: prod
+    volumes:
+      - ./web:/opt/drupal/web
+      - ./profiles:/opt/drupal/web/profiles
+      - ./themes:/opt/drupal/web/themes
+      - ./modules/custom:/opt/drupal/web/modules/custom
+      - php_vendor:/opt/drupal/vendor
+      - php_cache:/opt/drupal/web/sites/default/files
+    ports: []
+    networks:
+      - farmos_network
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports: []
+    volumes:
+      - ./web:/opt/drupal/web:ro
+      - ./docker/nginx/prod.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d/prod.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - php
+    networks:
+      - farmos_network
+    environment:
+      - NGINX_HOST=markhorconsultants.com
+      - NGINX_PORT=80
+
+  caddy:
+    image: caddy:latest
+    restart: always
+    container_name: markhor_caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - nginx
+    networks:
+      - farmos_network
+    environment:
+      - DOMAIN=${DOMAIN:-markhorconsultants.com}
+      - EMAIL=${LETSENCRYPT_EMAIL:-admin@markhorconsultants.com}
+
+  backup:
+    build:
+      context: .
+      dockerfile: Dockerfile.backup
+    container_name: markhor_backup
+    restart: always
+    volumes:
+      - ./web/sites/default/files:/backup/files:ro
+      - postgres_data:/backup/postgres:ro
+      - backups:/backups
+    environment:
+      BACKUP_RETENTION_DAYS: 30
+      DB_NAME: ${DB_NAME:-farmos}
+      DB_USER: ${DB_USER:-farmos}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      DB_HOST: postgres
+      BACKUP_SCHEDULE: "0 2 * * *"
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+    depends_on:
+      - postgres
+    networks:
+      - farmos_network
+
+  postgres-backup-cron:
+    image: mcuadros/ofelia:latest
+    container_name: markhor_backup_cron
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./backup-schedule.ini:/etc/ofelia/config.ini:ro
+    depends_on:
+      - backup
+    networks:
+      - farmos_network
+
+volumes:
+  postgres_data:
+    driver: local
+  php_vendor:
+    driver: local
+  php_cache:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+  backups:
+    driver: local
+
+networks:
+  farmos_network:
+    driver: bridge

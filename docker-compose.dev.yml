@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_INITDB_ARGS: "--locale=en_US.UTF-8 --encoding=UTF8"
+    command:
+      - "postgres"
+      - "-c"
+      - "log_statement=all"
+      - "-c"
+      - "log_duration=on"
+
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        - DEV_MODE=true
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      XDEBUG_MODE: develop,debug
+      XDEBUG_CONFIG: "client_host=host.docker.internal client_port=9003"
+      DRUPAL_ENVIRONMENT: dev
+    volumes:
+      - ./web:/opt/drupal/web
+      - ./profiles:/opt/drupal/web/profiles
+      - ./themes:/opt/drupal/web/themes
+      - ./modules/custom:/opt/drupal/web/modules/custom
+      - ./scripts:/opt/drupal/scripts
+      - php_vendor:/opt/drupal/vendor
+    command: >
+      sh -c "cd /opt/drupal &&
+             composer install &&
+             drush site:install farmos --db-url=pgsql://${DB_USER:-farmos}:${DB_PASSWORD:-changeme}@postgres:5432/${DB_NAME:-farmos} -y &&
+             drush user:create ${FARMOS_ADMIN_USER:-admin} --mail=${FARMOS_ADMIN_EMAIL:-admin@markhorconsultants.com} &&
+             drush user:password ${FARMOS_ADMIN_USER:-admin} ${FARMOS_ADMIN_PASSWORD:-changeme} &&
+             drush user-add-role administrator ${FARMOS_ADMIN_USER:-admin} &&
+             drush cache:rebuild &&
+             php-fpm"
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./web:/opt/drupal/web:ro
+      - ./docker/nginx/dev.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d/dev.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - php
+    networks:
+      - farmos_network
+    environment:
+      - NGINX_HOST=localhost
+      - NGINX_PORT=8080
+
+  adminer:
+    image: adminer:latest
+    container_name: markhor_adminer
+    ports:
+      - "127.0.0.1:8081:8080"
+    depends_on:
+      - postgres
+    networks:
+      - farmos_network
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: markhor_mailhog
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+    networks:
+      - farmos_network
+
+networks:
+  farmos_network:
+    driver: bridge
+
+volumes:
+  php_vendor:
+    driver: local

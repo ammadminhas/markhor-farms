@@ -1,0 +1,44 @@
+FROM alpine:latest
+
+# Install required tools
+RUN apk add --no-cache \
+    postgresql-client \
+    tar \
+    gzip \
+    curl \
+    aws-cli \
+    bash \
+    dcron
+
+# Create backup directories
+RUN mkdir -p /backups /backup/files /backup/postgres
+
+# Copy backup scripts
+COPY scripts/backup.sh /usr/local/bin/backup.sh
+COPY scripts/cleanup-backups.sh /usr/local/bin/cleanup-backups.sh
+
+# Make scripts executable
+RUN chmod +x /usr/local/bin/backup.sh /usr/local/bin/cleanup-backups.sh
+
+# Create non-root user for cron
+RUN addgroup -D -g 1000 backup && \
+    adduser -D -u 1000 -G backup backup
+
+# Change ownership of backup directory
+RUN chown -R backup:backup /backups
+
+# Set up cron job
+RUN echo '0 2 * * * /usr/local/bin/backup.sh >> /backups/backup.log 2>&1' | \
+    crontab -u backup -
+
+# Create healthcheck script
+RUN echo '#!/bin/sh' > /healthcheck.sh && \
+    echo 'test -f /backups/last-backup-timestamp || exit 1' >> /healthcheck.sh && \
+    chmod +x /healthcheck.sh
+
+USER backup
+
+HEALTHCHECK --interval=1h --timeout=10m --start-period=5m \
+    CMD /healthcheck.sh
+
+CMD ["/usr/sbin/crond", "-f", "-l", "2"]
