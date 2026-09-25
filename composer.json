@@ -1,0 +1,20 @@
+{
+    "name": "markhorconsultants/markhor-farms",
+    "description": "Markhor Farms - Self-hosted farmOS v4 platform",
+    "type": "project",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "drupal/core": "^10.0",
+        "drupal/core-composer-scaffold": "^10.0",
+        "drupal/core-project-message": "^10.0",
+        "composer/installers": "^2.0",
+        "drush/drush": "^12.0"
+    },
+    "config": {
+        "allow-plugins": {
+            "composer/installers": true,
+            "drupal/core-composer-scaffold": true,
+            "drupal/core-project-message": true
+        }
+    }
+}

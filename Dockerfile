@@ -16,8 +16,6 @@ RUN apk add --no-cache \
     icu-dev \
     zlib-dev \
     libzip-dev \
-    imagemagick \
-    imagemagick-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
     gd \
@@ -26,9 +24,7 @@ RUN apk add --no-cache \
     gmp \
     intl \
     zip \
-    opcache \
-    && pecl install imagick \
-    && docker-php-ext-enable imagick
+    opcache
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer

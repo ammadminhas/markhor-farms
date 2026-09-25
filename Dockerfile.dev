@@ -18,8 +18,6 @@ RUN apk add --no-cache \
     icu-dev \
     zlib-dev \
     libzip-dev \
-    imagemagick \
-    imagemagick-dev \
     vim \
     nano \
     htop \
@@ -31,15 +29,10 @@ RUN apk add --no-cache \
     gmp \
     intl \
     zip \
-    opcache \
-    && pecl install imagick \
-    && docker-php-ext-enable imagick
+    opcache
 
-# Install Xdebug for development
-RUN if [ "$DEV_MODE" = "true" ]; then \
-    pecl install xdebug && \
-    docker-php-ext-enable xdebug; \
-    fi
+# Note: Xdebug skipped on arm64 (requires compilation)
+# For debugging, use VSCode remote debugging or other IDE features
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -47,27 +40,16 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Set working directory
 WORKDIR /opt/drupal
 
-# Create necessary directories
-RUN mkdir -p web/profiles web/themes web/modules/custom && \
-    chown -R www-data:www-data /opt/drupal
-
-# Copy PHP configuration
+# Copy PHP configuration first
 COPY docker/php/php-dev.ini /usr/local/etc/php/php.ini
 COPY docker/php/php-fpm-dev.conf /usr/local/etc/php-fpm.d/www.conf
 
-# Copy Xdebug configuration for development
-COPY docker/php/xdebug.ini /usr/local/etc/php/conf.d/xdebug.ini
-
-# Download and install Drupal with farmOS (with dev dependencies)
-RUN composer create-project farmos/farm /opt/drupal --prefer-dist
-
-# Install Drupal Console and Drush for development
-RUN composer require drupal/console:* drush/drush --dev
+# Create directory structure for volumes
+RUN mkdir -p web/modules/custom web/themes/custom && \
+    chown -R www-data:www-data /opt/drupal
 
 # Set proper permissions
-RUN chown -R www-data:www-data /opt/drupal && \
-    find /opt/drupal -type d -exec chmod 755 {} \; && \
-    find /opt/drupal -type f -exec chmod 644 {} \;
+RUN chmod 755 /opt/drupal
 
 EXPOSE 9000
 
